@@ -17,6 +17,14 @@
 #define MIN_ROOM_WIDTH 6
 #define MAX_ROOM_WIDTH 12
 
+
+typedef struct {
+	int x; // Top left x-cordinate (x+width < COLS)
+	int y; // Top left y-cordinate (y+width < LINES)
+	int width;
+	int height; // if either height or width equal to 0, room is invalid.
+} Room;
+
 typedef struct {
 	int x;
 	int y;
@@ -28,14 +36,6 @@ typedef struct {
 	unsigned int gold;
 } Player;
 
-typedef struct {
-	int x; // Top left x-cordinate (x+width < COLS)
-	int y; // Top left y-cordinate (y+width < LINES)
-	int width;
-	int height; // if either height or width equal to 0, room is invalid.
-} Room;
-
-Player* p; // TODO: change this to player or player1
 int nrooms = 0;
 
 Player*
@@ -64,6 +64,15 @@ delplayer(Player *player)
 	free(player);
 }
 
+void
+delrooms(Room **rooms)
+{
+	for (int i = 0; i < nrooms; i++) {
+		free(rooms[i]);
+	}
+	free(rooms);
+}
+
 
 
 void setscr(void)
@@ -78,10 +87,10 @@ void setscr(void)
  * depending if there will be a collision ahead.
  */
 int
-colliding(int y_amount, int x_amount, Player* p) 
+colliding(int y_amount, int x_amount, Player* player)
 {
-	int new_x_pos = p->x + x_amount;
-	int new_y_pos = p->y + y_amount;
+	int new_x_pos = player->x + x_amount;
+	int new_y_pos = player->y + y_amount;
 
 	int at_edge = (new_x_pos < 0) || (new_x_pos >= COLS) || (new_y_pos < 0) || (new_y_pos >= LINES);
 
@@ -89,7 +98,7 @@ colliding(int y_amount, int x_amount, Player* p)
 		return 1;
 	}
 
-	switch (mvinch(p->y + y_amount, p->x + x_amount)) {
+	switch (mvinch(player->y + y_amount, player->x + x_amount)) {
 	case '-':
 		return 1;
 	case '|':
@@ -146,7 +155,7 @@ createroom(int x, int y, int width, int height)
 }
 
 Room **
-genmap(void)
+genrooms(void)
 {
 	nrooms = MIN_NUM_ROOM + rand()%(MAX_NUM_ROOM-MIN_NUM_ROOM);
 	Room** rooms = malloc(nrooms * sizeof(Room));
@@ -198,42 +207,53 @@ drawmap(Room **rooms)
 
 
 void
-player_move(int y_amount, int x_amount, Player *p)
+player_move(int y_amount, int x_amount, Player *player)
 {
-	if (!colliding(y_amount, x_amount, p)) {
-		p->y += y_amount;
-		p->x += x_amount;
-		clear();
-		//genmap();
-		mvprintw(p->y, p->x, "@");
-		refresh();
+	if (!colliding(y_amount, x_amount, player)) {
+		player->y += y_amount;
+		player->x += x_amount;
 	}
+	mvprintw(player->y, player->x, "@");
+}
+
+void
+spawnplayer(Player *player, Room **rooms)
+{
+	/* Pick a room for the user to start.
+	 * For now, first room is the selected room.
+	 */
+	player->x = rooms[0]->x + rooms[0]->width/2;
+	player->y = rooms[0]->y + rooms[0]->height/2;
+	player_move(0, 0, player);
 }
 
 int
-handle_input(int key)
+handle_input(int key, Player *player, Room **rooms)
 {
 	switch (key) {
 	case 'q': /* FALLTHROUGH */
 	case 'Q': /* FALLTHROUGH */
 	case KEYESC:
 		return 0;
-
 	case 'h': /* FALLTHROUGH */
 	case KEY_LEFT:
-		player_move(0, -1, p);
+		drawmap(rooms);
+		player_move(0, -1, player);
 		break;
 	case 'j': /* FALLTHROUGH */
 	case KEY_DOWN:
-		player_move(1, 0, p);
+		drawmap(rooms);
+		player_move(1, 0, player);
 		break;
 	case 'k': /* FALLTHROUGH */
 	case KEY_UP:
-		player_move(-1, 0, p);
+		drawmap(rooms);
+		player_move(-1, 0, player);
 		break;
 	case 'l': /* FALLTHROUGH */
 	case KEY_RIGHT:
-		player_move(0, 1, p);
+		drawmap(rooms);
+		player_move(0, 1, player);
 		break;
 
 	}
@@ -246,21 +266,19 @@ main(void)
 	int key = 1;
 	setscr();
 
-	p = setplayer(10, 10, 10);
-	Room **rooms = genmap();
+	Player *player = setplayer(10, 10, 10);
+	Room **rooms = genrooms();
+
+	/* Initial drawing */
 	drawmap(rooms);
-	getch();
-	return 0;
-	
-	
+	spawnplayer(player, rooms);
 
-	player_move(0, 0, p);
-	refresh();
-
-	while (handle_input(key)) {
+	while (handle_input(key, player, rooms)) {
 		key = getch();
 	}
-	delplayer(p);
+
+	delplayer(player);
+	delrooms(rooms);
 
 	endwin();
 	return 0;
